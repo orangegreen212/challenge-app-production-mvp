@@ -5,7 +5,7 @@ import type { GeneratePlanRequest } from './schemas';
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 // Configurable via env so the model can be swapped without a code change.
 // See https://openrouter.ai/models for available models.
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free';
 
 export class OpenRouterError extends Error {
   constructor(
