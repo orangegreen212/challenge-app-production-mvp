@@ -8,11 +8,12 @@ interface DurationSelectorProps {
   onChange: (value: Duration) => void;
 }
 
+// Capped at 21 days — see the matching comment on
+// generatedChallengeSchema.durationDays in lib/ai/schemas.ts for why.
 const options: { label: string; value: Duration }[] = [
   { label: '7 days', value: 7 },
   { label: '14 days', value: 14 },
-  { label: '30 days', value: 30 },
-  { label: 'Custom', value: 'custom' },
+  { label: '21 days', value: 21 },
 ];
 
 export function DurationSelector({ value, onChange }: DurationSelectorProps) {
