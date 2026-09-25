@@ -3,8 +3,11 @@ import { SYSTEM_PROMPT, buildUserPrompt } from './prompts';
 import type { GeneratePlanRequest } from './schemas';
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
-// A current Groq-hosted model with strong JSON-following behavior.
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+// llama-3.3-70b-versatile was decommissioned by Groq on 2026-08-16.
+// openai/gpt-oss-120b is Groq's recommended replacement (qwen/qwen3.6-27b
+// is the other option). Configurable via env so future Groq deprecations
+// don't require a code change. See https://console.groq.com/docs/deprecations
+const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
 export class GroqError extends Error {
   constructor(
