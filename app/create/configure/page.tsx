@@ -27,7 +27,7 @@ export default function ConfigurePage() {
     'Build practical skills and become confident enough to apply them in real situations.'
   );
   const [editingGoal, setEditingGoal] = useState(false);
-  const [duration, setDuration] = useState<Duration>(30);
+  const [duration, setDuration] = useState<Duration>(14);
   const [timePerDay, setTimePerDay] = useState<TimePerDay>(60);
   const [intensity, setIntensity] = useState<Intensity>('balanced');
   const [preferredDays, setPreferredDays] = useState<DayOfWeek[]>([
@@ -125,7 +125,7 @@ export default function ConfigurePage() {
 
           <Button
             onClick={() => {
-              const durationDays = typeof duration === 'number' ? duration : 30;
+              const durationDays = duration;
               sessionStorage.setItem(
                 'challenge-create-config',
                 JSON.stringify({
