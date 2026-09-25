@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generatePlanRequestSchema, generatedChallengeSchema, validateGeneratedChallengeStructure } from '@/lib/ai/schemas';
-import { generateChallengeJson, GroqError } from '@/lib/ai/groq';
+import { generateChallengeJson, OpenRouterError } from '@/lib/ai/openrouter';
 import { saveGeneratedChallenge } from '@/lib/db/challenges';
 
 export const runtime = 'nodejs';
@@ -40,16 +40,16 @@ export async function POST(request: Request) {
   }
   const input = parsedRequest.data;
 
-  // 3 & 4. Build the prompt and call Groq.
+  // 3 & 4. Build the prompt and call OpenRouter.
   let rawContent: string;
   try {
     rawContent = await generateChallengeJson(input);
   } catch (err) {
-    if (err instanceof GroqError) {
+    if (err instanceof OpenRouterError) {
       const status = err.status === 429 ? 429 : 502;
       return NextResponse.json({ error: err.message }, { status });
     }
-    console.error('Unexpected Groq error', err);
+    console.error('Unexpected OpenRouter error', err);
     return NextResponse.json({ error: 'Failed to generate plan' }, { status: 502 });
   }
 
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   try {
     parsedJson = JSON.parse(rawContent);
   } catch {
-    console.error('Groq returned non-JSON content:', rawContent.slice(0, 1000));
+    console.error('OpenRouter returned non-JSON content:', rawContent.slice(0, 1000));
     return NextResponse.json(
       { error: 'The AI returned a malformed response. Please try again.' },
       { status: 502 }
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   // 7. Validate the response against a strict schema.
   const parsedPlan = generatedChallengeSchema.safeParse(parsedJson);
   if (!parsedPlan.success) {
-    console.error('Groq output failed schema validation:', parsedPlan.error.flatten());
+    console.error('OpenRouter output failed schema validation:', parsedPlan.error.flatten());
     return NextResponse.json(
       { error: 'The AI returned an invalid plan. Please try again.' },
       { status: 502 }
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
   try {
     validateGeneratedChallengeStructure(parsedPlan.data, input.durationDays);
   } catch (err) {
-    console.error('Groq output failed structural validation:', err);
+    console.error('OpenRouter output failed structural validation:', err);
     return NextResponse.json(
       {
         error:

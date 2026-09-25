@@ -178,7 +178,7 @@ async function fetchOneChallengeFromDb(
 }
 
 /**
- * Persists a validated, Groq-generated challenge for the given user.
+ * Persists a validated, AI-generated challenge for the given user.
  * Writes the challenge row, then its days, then its tasks. If any step
  * after the challenge row fails, the challenge row (and anything already
  * written under it, via ON DELETE CASCADE) is deleted so we never leave

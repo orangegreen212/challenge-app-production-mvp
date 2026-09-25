@@ -77,7 +77,7 @@ export interface ChallengeConfig {
 }
 
 // ---------------------------------------------------------------------
-// Production (Supabase + Groq) types
+// Production (Supabase + AI) types
 // ---------------------------------------------------------------------
 
 export type TaskType =

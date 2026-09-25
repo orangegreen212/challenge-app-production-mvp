@@ -138,5 +138,5 @@ export function useChallenge() {
 }
 
 // Re-exported for any screen that explicitly wants static demo/dev data
-// (clearly separate from real, Supabase-persisted, Groq-generated challenges).
+// (clearly separate from real, Supabase-persisted, AI-generated challenges).
 export { mockActiveChallenge, mockAllChallenges };
