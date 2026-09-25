@@ -1,4 +1,4 @@
-export type Duration = 7 | 14 | 30 | 'custom';
+export type Duration = 7 | 14 | 21;
 export type Intensity = 'light' | 'balanced' | 'intensive';
 export type TimePerDay = 30 | 45 | 60 | 90 | 120;
 export type DayOfWeek =
