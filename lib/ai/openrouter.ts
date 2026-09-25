@@ -25,17 +25,26 @@ export class OpenRouterError extends Error {
  * returns the raw text content of the model's reply. Never call this from
  * a client component — it reads a server-only environment variable.
  */
-export async function generateChallengeJson(
-  input: GeneratePlanRequest
-): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new OpenRouterError('OPENROUTER_API_KEY is not configured on the server');
-  }
+function buildBody(input: GeneratePlanRequest, useStructuredOutput: boolean) {
+  return JSON.stringify({
+    model: OPENROUTER_MODEL,
+    temperature: 0.6,
+    max_tokens: 8000,
+    ...(useStructuredOutput ? { response_format: { type: 'json_object' } } : {}),
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: buildUserPrompt(input) },
+    ],
+  });
+}
 
-  let response: Response;
+async function callOpenRouter(
+  apiKey: string,
+  input: GeneratePlanRequest,
+  useStructuredOutput: boolean
+): Promise<Response> {
   try {
-    response = await fetch(OPENROUTER_ENDPOINT, {
+    return await fetch(OPENROUTER_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -44,21 +53,67 @@ export async function generateChallengeJson(
         'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://localhost:3000',
         'X-Title': 'Challenge App',
       },
-      body: JSON.stringify({
-        model: OPENROUTER_MODEL,
-        temperature: 0.6,
-        max_tokens: 8000,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: buildUserPrompt(input) },
-        ],
-      }),
+      body: buildBody(input, useStructuredOutput),
     });
   } catch (err) {
     throw new OpenRouterError(
       `Could not reach OpenRouter: ${err instanceof Error ? err.message : 'network error'}`
     );
+  }
+}
+
+/**
+ * Some free/community models on OpenRouter don't support the
+ * `response_format: json_object` structured-output feature and return a
+ * 400 for it. Detect that specific case so we can retry once without it,
+ * instead of failing the whole request.
+ */
+function isUnsupportedStructuredOutputError(status: number, bodyText: string): boolean {
+  if (status !== 400) return false;
+  const lower = bodyText.toLowerCase();
+  return (
+    lower.includes('structured-outputs') ||
+    lower.includes('structured outputs') ||
+    lower.includes('response_format')
+  );
+}
+
+/**
+ * Extracts a JSON object from a model's raw text reply. Models without
+ * structured-output support sometimes wrap the JSON in a ```json fence or
+ * add a sentence before/after it — this pulls out just the object.
+ */
+function extractJson(text: string): string {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) return fenced[1].trim();
+
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1);
+  }
+  return trimmed;
+}
+
+export async function generateChallengeJson(
+  input: GeneratePlanRequest
+): Promise<string> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new OpenRouterError('OPENROUTER_API_KEY is not configured on the server');
+  }
+
+  let response = await callOpenRouter(apiKey, input, true);
+
+  if (!response.ok && response.status === 400) {
+    const bodyText = await response.text().catch(() => '');
+    if (isUnsupportedStructuredOutputError(400, bodyText)) {
+      // Retry once without response_format for models that don't support it.
+      response = await callOpenRouter(apiKey, input, false);
+    } else {
+      throw new OpenRouterError(`OpenRouter API error (400): ${bodyText.slice(0, 500)}`, 400);
+    }
   }
 
   if (response.status === 429) {
@@ -80,5 +135,5 @@ export async function generateChallengeJson(
     throw new OpenRouterError('OpenRouter returned an empty response');
   }
 
-  return content;
+  return extractJson(content);
 }
