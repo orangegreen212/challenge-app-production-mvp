@@ -5,6 +5,10 @@ import { generateChallengeJson, GroqError } from '@/lib/ai/groq';
 import { saveGeneratedChallenge } from '@/lib/db/challenges';
 
 export const runtime = 'nodejs';
+// NOTE: on Vercel Hobby this is capped at 10s regardless of this value —
+// only takes effect on Pro/Enterprise. Generation is scoped to fit under
+// that 10s ceiling (see durationDays cap in lib/ai/schemas.ts); if you
+// upgrade to Pro, this 60s ceiling becomes real headroom.
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
