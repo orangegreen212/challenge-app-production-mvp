@@ -5,6 +5,9 @@ import type { GeneratePlanRequest } from './schemas';
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 // Configurable via env so the model can be swapped without a code change.
 // See https://openrouter.ai/models for available models.
+// NOTE: on Vercel Hobby, this whole request must finish inside ~10s
+// (see maxDuration note in app/api/generate-plan/route.ts), so pick a
+// small/fast free model here — large ones (e.g. 70B+) routinely time out.
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free';
 
 export class OpenRouterError extends Error {
