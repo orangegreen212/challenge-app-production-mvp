@@ -28,7 +28,12 @@ export const generatedChallengeSchema = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(1000).default(''),
   goal: z.string().trim().max(1000).default(''),
-  durationDays: z.number().int().positive().max(90),
+  // Capped at 21 (not the original 90): on Vercel Hobby, serverless
+  // functions are hard-killed at 10s regardless of `maxDuration` in code,
+  // and Groq can't reliably generate a full JSON plan for longer durations
+  // within that window. See generatePlanRequestSchema below for the
+  // matching input-side cap.
+  durationDays: z.number().int().positive().max(21),
   days: z.array(generatedDaySchema).min(1),
 });
 
@@ -74,7 +79,8 @@ export const generatePlanRequestSchema = z.object({
   goal: z.string().trim().min(1, 'goal is required').max(1000),
   background: z.string().trim().max(2000).default(''),
   preferences: z.string().trim().max(1000).default(''),
-  durationDays: z.number().int().positive().max(90).default(30),
+  // Kept in sync with generatedChallengeSchema.durationDays above.
+  durationDays: z.number().int().positive().max(21).default(14),
   intensity: z.enum(['light', 'balanced', 'intensive']).default('balanced'),
   minutesPerDay: z.number().int().positive().max(480).default(30),
 });
