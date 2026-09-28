@@ -79,7 +79,7 @@ export function DayCard({
               className="font-semibold text-foreground bg-transparent border-b border-primary outline-none"
             />
           ) : (
-            <h4 className="font-semibold text-foreground truncate">{day.title}</h4>
+            <h4 className="font-semibold text-foreground break-words">{day.title}</h4>
           )}
           <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">

@@ -44,7 +44,7 @@ export function TaskCard({ task, onToggle, onEdit, size = 'md' }: TaskCardProps)
       <div className="flex-1 min-w-0">
         <p
           className={cn(
-            'font-medium leading-snug',
+            'font-medium leading-snug break-words',
             task.completed
               ? 'text-muted-foreground line-through'
               : 'text-foreground'
@@ -53,7 +53,7 @@ export function TaskCard({ task, onToggle, onEdit, size = 'md' }: TaskCardProps)
           {task.title}
         </p>
         {task.description && size !== 'sm' && (
-          <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+          <p className="mt-1 text-sm text-muted-foreground whitespace-pre-line break-words">
             {task.description}
           </p>
         )}
