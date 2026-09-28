@@ -288,3 +288,52 @@ export async function setTaskCompletion(
 
   return !error && !!data;
 }
+
+/** Deletes a challenge (days and tasks go with it via ON DELETE CASCADE). RLS scopes this to the owner. */
+export async function deleteChallengeById(
+  supabase: SupabaseClient,
+  challengeId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('challenges')
+    .delete()
+    .eq('id', challengeId)
+    .select('id')
+    .maybeSingle();
+  return !error && !!data;
+}
+
+/** Deletes a single task. RLS scopes this to tasks under the user's own challenges. */
+export async function deleteTaskById(
+  supabase: SupabaseClient,
+  taskId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId)
+    .select('id')
+    .maybeSingle();
+  return !error && !!data;
+}
+
+/** Loads a day with its parent challenge and tasks — used as context for the AI helper. */
+export async function fetchDayContext(supabase: SupabaseClient, dayId: string) {
+  const { data: day } = await supabase
+    .from('challenge_days')
+    .select('*')
+    .eq('id', dayId)
+    .maybeSingle();
+  if (!day) return null;
+  const { data: challenge } = await supabase
+    .from('challenges')
+    .select('title, goal')
+    .eq('id', (day as DbChallengeDayRow).challenge_id)
+    .maybeSingle();
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select('title, description, estimated_minutes, completed')
+    .eq('day_id', dayId)
+    .order('task_number', { ascending: true });
+  return { day: day as DbChallengeDayRow, challenge, tasks: tasks || [] };
+}

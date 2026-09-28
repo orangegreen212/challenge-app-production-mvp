@@ -11,6 +11,7 @@ interface DayCardProps {
   onToggleTask?: (taskId: string) => void;
   onEditTask?: (taskId: string, title: string) => void;
   onEditDay?: (title: string) => void;
+  onDeleteTask?: (taskId: string) => void;
   defaultExpanded?: boolean;
   isToday?: boolean;
   isPreview?: boolean;
@@ -21,6 +22,7 @@ export function DayCard({
   onToggleTask,
   onEditTask,
   onEditDay,
+  onDeleteTask,
   defaultExpanded = false,
   isToday = false,
   isPreview = false,
@@ -130,6 +132,7 @@ export function DayCard({
               key={task.id}
               task={task}
               onToggle={() => onToggleTask?.(task.id)}
+              onDelete={onDeleteTask && !isPreview ? () => onDeleteTask(task.id) : undefined}
               onEdit={
                 onEditTask
                   ? () => {

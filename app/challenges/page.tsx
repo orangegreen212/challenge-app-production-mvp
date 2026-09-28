@@ -4,10 +4,11 @@ import { AppShell } from '@/components/shared/app-shell';
 import { ChallengeCard } from '@/components/shared/challenge-card';
 import { EmptyState } from '@/components/shared/empty-state';
 import { useChallenge } from '@/lib/challenge-context';
-import { LayoutGrid } from 'lucide-react';
+import { ConfirmDelete } from '@/components/shared/confirm-delete';
+import { LayoutGrid, Trash2 } from 'lucide-react';
 
 export default function ChallengesPage() {
-  const { allChallenges } = useChallenge();
+  const { allChallenges, deleteChallenge } = useChallenge();
 
   return (
     <AppShell>
@@ -27,12 +28,25 @@ export default function ChallengesPage() {
         ) : (
           <div className="space-y-4">
             {allChallenges.map((challenge) => (
-              <ChallengeCard
-                key={challenge.id}
-                challenge={challenge}
-                variant={challenge.status === 'active' ? 'active' : 'compact'}
-                href={`/challenges/${challenge.id}`}
-              />
+              <div key={challenge.id} className="relative">
+                <ChallengeCard
+                  challenge={challenge}
+                  variant={challenge.status === 'active' ? 'active' : 'compact'}
+                  href={`/challenges/${challenge.id}`}
+                />
+                <ConfirmDelete
+                  title="Delete this challenge?"
+                  description={`"${challenge.title}" and all its days and tasks will be removed permanently.`}
+                  onConfirm={() => deleteChallenge(challenge.id)}
+                >
+                  <button
+                    className="absolute right-3 top-3 rounded-lg bg-card/80 p-2 text-muted-foreground backdrop-blur transition-colors hover:text-destructive"
+                    aria-label="Delete challenge"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </ConfirmDelete>
+              </div>
             ))}
           </div>
         )}

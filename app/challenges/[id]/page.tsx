@@ -8,7 +8,9 @@ import { LoadingState } from '@/components/shared/loading-state';
 import { WeekSectionComponent } from '@/components/shared/week-section';
 import { ProgressBar } from '@/components/shared/progress-bar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ConfirmDelete } from '@/components/shared/confirm-delete';
+import { useChallenge } from '@/lib/challenge-context';
 import type { Challenge } from '@/lib/types';
 import {
   calculateProgress,
@@ -47,6 +49,21 @@ export default function ChallengeDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const { deleteChallenge, refreshChallenges } = useChallenge();
+
+  const removeTask = async (taskId: string) => {
+    const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+    if (res.ok) {
+      await load();
+      refreshChallenges();
+    }
+  };
+
+  const removeChallenge = async () => {
+    const ok = await deleteChallenge(challengeId);
+    if (ok) router.push('/challenges');
+  };
 
   const toggleTask = async (dayId: string, taskId: string) => {
     if (!challenge) return;
@@ -157,6 +174,19 @@ export default function ChallengeDetailPage() {
             </div>
           </div>
 
+          <div className="mb-8 flex justify-end">
+            <ConfirmDelete
+              title="Delete this challenge?"
+              description={`"${challenge.title}" and all its days and tasks will be removed permanently.`}
+              onConfirm={removeChallenge}
+            >
+              <Button variant="outline" size="sm" className="text-destructive">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete challenge
+              </Button>
+            </ConfirmDelete>
+          </div>
+
           <div className="space-y-6 mb-8">
             {challenge.weeks.map((week) => (
               <WeekSectionComponent
@@ -164,6 +194,7 @@ export default function ChallengeDetailPage() {
                 week={week}
                 currentDay={challenge.currentDay}
                 onToggleTask={toggleTask}
+                onDeleteTask={removeTask}
               />
             ))}
           </div>

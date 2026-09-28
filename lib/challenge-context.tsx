@@ -22,6 +22,8 @@ interface ChallengeContextValue {
   demoChallenge: Challenge;
   toggleTask: (dayId: string, taskId: string) => Promise<void>;
   refreshChallenges: () => Promise<void>;
+  deleteChallenge: (challengeId: string) => Promise<boolean>;
+  deleteTask: (taskId: string) => Promise<boolean>;
   loadingChallenges: boolean;
 }
 
@@ -111,6 +113,26 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     [challenges, refreshChallenges]
   );
 
+  const deleteChallenge = useCallback(async (challengeId: string) => {
+    const res = await fetch(`/api/challenges/${challengeId}`, { method: 'DELETE' });
+    if (res.ok) {
+      setChallenges((prev) => prev.filter((c) => c.id !== challengeId));
+    }
+    return res.ok;
+  }, []);
+
+  const deleteTask = useCallback(
+    async (taskId: string) => {
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      if (res.ok) {
+        // Re-sync so totals, progress and "current day" are recalculated server-side.
+        await refreshChallenges();
+      }
+      return res.ok;
+    },
+    [refreshChallenges]
+  );
+
   const activeChallenge =
     challenges.find((c) => c.status === 'active') || challenges[0] || null;
 
@@ -123,6 +145,8 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         demoChallenge: generatedPlanChallenge,
         toggleTask,
         refreshChallenges,
+        deleteChallenge,
+        deleteTask,
         loadingChallenges,
       }}
     >

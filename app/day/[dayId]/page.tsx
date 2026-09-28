@@ -4,17 +4,19 @@ import { useParams, useRouter } from 'next/navigation';
 import { AppShell } from '@/components/shared/app-shell';
 import { TaskCard } from '@/components/shared/task-card';
 import { Button } from '@/components/ui/button';
+import { AskAiDialog } from '@/components/shared/ask-ai-dialog';
 import { useChallenge } from '@/lib/challenge-context';
 import { getDayById, formatMinutes } from '@/lib/challenge-utils';
-import { ArrowLeft, Clock, Target, Sparkles, CheckCircle2, PartyPopper } from 'lucide-react';
+import { ArrowLeft, Clock, Target, CheckCircle2, PartyPopper } from 'lucide-react';
 
 export default function DayDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { activeChallenge, toggleTask } = useChallenge();
+  const { allChallenges, toggleTask, deleteTask } = useChallenge();
 
   const dayId = params.dayId as string;
-  const day = activeChallenge ? getDayById(activeChallenge, dayId) : null;
+  const day =
+    allChallenges.map((c) => getDayById(c, dayId)).find((d) => d !== null && d !== undefined) ?? null;
 
   if (!day) {
     return (
@@ -73,6 +75,7 @@ export default function DayDetailPage() {
                 key={task.id}
                 task={task}
                 onToggle={() => toggleTask(day.id, task.id)}
+                onDelete={() => deleteTask(task.id)}
                 size="lg"
               />
             ))}
@@ -89,14 +92,7 @@ export default function DayDetailPage() {
           </div>
         ) : (
           <div className="mt-6 space-y-3">
-            <Button
-              variant="outline"
-              className="w-full rounded-xl border-dashed"
-              size="lg"
-            >
-              <Sparkles className="mr-2 h-5 w-5 text-primary" />
-              Need help? Ask AI
-            </Button>
+            <AskAiDialog dayId={day.id} />
 
             <Button
               onClick={() => router.push('/dashboard')}

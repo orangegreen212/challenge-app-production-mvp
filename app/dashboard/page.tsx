@@ -13,7 +13,8 @@ import { TaskCard } from '@/components/shared/task-card';
 import { Plus, ArrowRight, CheckCircle2, Flame, Sparkles, LayoutGrid } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { activeChallenge, toggleTask, achievements, loadingChallenges } = useChallenge();
+  const { allChallenges, toggleTask, deleteTask, achievements, loadingChallenges } = useChallenge();
+  const activeChallenges = allChallenges.filter((c) => c.status === 'active');
 
   if (loadingChallenges) {
     return (
@@ -23,7 +24,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!activeChallenge) {
+  if (activeChallenges.length === 0) {
     return (
       <AppShell>
         <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8 lg:max-w-4xl lg:py-10">
@@ -39,10 +40,14 @@ export default function DashboardPage() {
     );
   }
 
-  const progress = calculateProgress(activeChallenge);
-  const todayPlan = getTodayPlan(activeChallenge);
-  const todayCompleted = todayPlan?.tasks.filter((t) => t.completed).length || 0;
-  const todayTotal = todayPlan?.tasks.length || 0;
+  const todayEntries = activeChallenges
+    .map((challenge) => ({ challenge, plan: getTodayPlan(challenge) }))
+    .filter((e): e is { challenge: (typeof activeChallenges)[number]; plan: NonNullable<ReturnType<typeof getTodayPlan>> } => !!e.plan);
+  const todayCompleted = todayEntries.reduce(
+    (n, e) => n + e.plan.tasks.filter((t) => t.completed).length,
+    0
+  );
+  const todayTotal = todayEntries.reduce((n, e) => n + e.plan.tasks.length, 0);
   const allDone = todayCompleted === todayTotal && todayTotal > 0;
   const unlockedAchievements = achievements.filter((a) => a.unlocked);
 
@@ -59,7 +64,11 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <ChallengeCard challenge={activeChallenge} variant="active" />
+        <div className="space-y-4">
+          {activeChallenges.map((challenge) => (
+            <ChallengeCard key={challenge.id} challenge={challenge} variant="active" />
+          ))}
+        </div>
 
         <div className="mt-8">
           <div className="mb-4 flex items-center justify-between">
@@ -69,43 +78,56 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {todayPlan && (
-            <>
-              {allDone ? (
-                <div className="rounded-2xl border border-success/20 bg-gradient-to-br from-success/10 to-card p-6 text-center animate-celebrate">
-                  <CheckCircle2 className="mx-auto h-12 w-12 text-success mb-3" />
-                  <h3 className="text-xl font-bold">All tasks done!</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    You completed everything for today. See you tomorrow.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {todayPlan.tasks.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      onToggle={() => toggleTask(todayPlan.id, task.id)}
-                      size="lg"
-                    />
-                  ))}
-                </div>
-              )}
+          <div className="space-y-6">
+            {todayEntries.map(({ challenge, plan }) => {
+              const done = plan.tasks.filter((t) => t.completed).length;
+              const total = plan.tasks.length;
+              return (
+                <section key={challenge.id}>
+                  <div className="mb-2.5 flex items-center justify-between gap-2">
+                    <h3 className="truncate text-sm font-semibold text-muted-foreground">
+                      {challenge.title}
+                    </h3>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {done} / {total}
+                    </span>
+                  </div>
+                  {total > 0 && done === total ? (
+                    <div className="rounded-2xl border border-success/20 bg-gradient-to-br from-success/10 to-card p-5 text-center">
+                      <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-success" />
+                      <p className="font-semibold">All tasks done!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {plan.tasks.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onToggle={() => toggleTask(plan.id, task.id)}
+                          onDelete={() => deleteTask(task.id)}
+                          size="lg"
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <Link href={`/day/${plan.id}`}>
+                    <Button variant="outline" className="mt-3 w-full rounded-xl" size="lg">
+                      Open plan
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </section>
+              );
+            })}
+          </div>
 
-              <div className="mt-4">
-                <ProgressBar value={todayCompleted} max={todayTotal} size="md" />
-                <p className="mt-2 text-sm text-muted-foreground text-center">
-                  Today&apos;s progress: {todayCompleted} / {todayTotal} completed
-                </p>
-              </div>
-
-              <Link href={`/day/${todayPlan.id}`}>
-                <Button variant="outline" className="mt-4 w-full rounded-xl" size="lg">
-                  Open today&apos;s plan
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </>
+          {todayTotal > 0 && (
+            <div className="mt-6">
+              <ProgressBar value={todayCompleted} max={todayTotal} size="md" />
+              <p className="mt-2 text-center text-sm text-muted-foreground">
+                Today&apos;s progress: {todayCompleted} / {todayTotal} completed
+              </p>
+            </div>
           )}
         </div>
 

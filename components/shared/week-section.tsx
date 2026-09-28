@@ -9,6 +9,7 @@ interface WeekSectionComponentProps {
   onToggleTask?: (dayId: string, taskId: string) => void;
   onEditTask?: (dayId: string, taskId: string, title: string) => void;
   onEditDay?: (dayId: string, title: string) => void;
+  onDeleteTask?: (taskId: string) => void;
   currentDay?: number;
   isPreview?: boolean;
 }
@@ -18,6 +19,7 @@ export function WeekSectionComponent({
   onToggleTask,
   onEditTask,
   onEditDay,
+  onDeleteTask,
   currentDay,
   isPreview = false,
 }: WeekSectionComponentProps) {
@@ -37,6 +39,7 @@ export function WeekSectionComponent({
             onToggleTask={(taskId) => onToggleTask?.(day.id, taskId)}
             onEditTask={(taskId, title) => onEditTask?.(day.id, taskId, title)}
             onEditDay={(title) => onEditDay?.(day.id, title)}
+            onDeleteTask={onDeleteTask}
             isToday={day.dayNumber === currentDay}
             isPreview={isPreview}
           />

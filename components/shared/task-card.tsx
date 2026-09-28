@@ -1,13 +1,15 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { Check, Clock } from 'lucide-react';
+import { Check, Clock, Trash2 } from 'lucide-react';
+import { ConfirmDelete } from './confirm-delete';
 import type { Task } from '@/lib/types';
 
 interface TaskCardProps {
   task: Task;
   onToggle?: () => void;
   onEdit?: () => void;
+  onDelete?: () => void;
   size?: 'sm' | 'md' | 'lg';
 }
 
@@ -17,7 +19,7 @@ const sizeMap = {
   lg: 'p-5',
 };
 
-export function TaskCard({ task, onToggle, onEdit, size = 'md' }: TaskCardProps) {
+export function TaskCard({ task, onToggle, onEdit, onDelete, size = 'md' }: TaskCardProps) {
   return (
     <div
       className={cn(
@@ -70,6 +72,21 @@ export function TaskCard({ task, onToggle, onEdit, size = 'md' }: TaskCardProps)
         >
           Edit
         </button>
+      )}
+
+      {onDelete && (
+        <ConfirmDelete
+          title="Delete this task?"
+          description={`"${task.title}" will be removed permanently.`}
+          onConfirm={onDelete}
+        >
+          <button
+            className="shrink-0 p-1 text-muted-foreground transition-colors hover:text-destructive"
+            aria-label="Delete task"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </ConfirmDelete>
       )}
     </div>
   );
