@@ -5,10 +5,9 @@ import { generateChallengeJson, OpenRouterError } from '@/lib/ai/openrouter';
 import { saveGeneratedChallenge } from '@/lib/db/challenges';
 
 export const runtime = 'nodejs';
-// NOTE: on Vercel Hobby this is capped at 10s regardless of this value —
-// only takes effect on Pro/Enterprise. Generation is scoped to fit under
-// that 10s ceiling (see durationDays cap in lib/ai/schemas.ts); if you
-// upgrade to Pro, this 60s ceiling becomes real headroom.
+// Vercel kills the function at this limit. Do not raise it to paper over a slow
+// model: the OpenRouter call has its own 45s budget (see lib/ai/openrouter.ts)
+// so that we return a clear JSON error before this ceiling is reached.
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
@@ -40,13 +39,23 @@ export async function POST(request: Request) {
   }
   const input = parsedRequest.data;
 
-  // 3 & 4. Build the prompt and call OpenRouter.
+  // 3 & 4. Build the prompt and call OpenRouter (bounded by its own deadline).
   let rawContent: string;
+  const startedAt = Date.now();
   try {
     rawContent = await generateChallengeJson(input);
   } catch (err) {
     if (err instanceof OpenRouterError) {
-      const status = err.status === 429 ? 429 : 502;
+      // Diagnostics only: status/code/duration and the upstream error text.
+      // Never the prompt, the API key or user data.
+      console.error('OpenRouter request failed', {
+        status: err.status,
+        code: err.code,
+        detail: err.detail,
+        durationMs: Date.now() - startedAt,
+        durationDays: input.durationDays,
+      });
+      const status = err.code === 'timeout' ? 504 : err.status === 429 ? 429 : 502;
       return NextResponse.json({ error: err.message }, { status });
     }
     console.error('Unexpected OpenRouter error', err);
@@ -58,7 +67,8 @@ export async function POST(request: Request) {
   try {
     parsedJson = JSON.parse(rawContent);
   } catch {
-    console.error('OpenRouter returned non-JSON content:', rawContent.slice(0, 1000));
+    // Log only the size: the content is derived from the user's prompt.
+    console.error('OpenRouter returned non-JSON content, length:', rawContent.length);
     return NextResponse.json(
       { error: 'The AI returned a malformed response. Please try again.' },
       { status: 502 }
