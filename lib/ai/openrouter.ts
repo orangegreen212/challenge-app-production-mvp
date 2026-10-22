@@ -6,10 +6,31 @@ const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 // Configurable via the OPENROUTER_MODEL env var so the model can be swapped
 // without a code change. See https://openrouter.ai/models for valid IDs — a
 // model ID with no live endpoint makes OpenRouter answer 404.
-export const DEFAULT_OPENROUTER_MODEL = 'nvidia/nemotron-3.5-super-vl:free';
+// Google AI Studio endpoint: supports response_format, 32k max output, MoE (~4B
+// active params) so it is fast enough for the 45s budget. Reasoning models such
+// as nvidia/nemotron-3.5-super-vl:free timed out on 14-day plans (45s).
+export const DEFAULT_OPENROUTER_MODEL = 'google/gemma-4-26b-a4b-it:free';
 
-function getModel(): string {
-  return process.env.OPENROUTER_MODEL?.trim() || DEFAULT_OPENROUTER_MODEL;
+// Tried in order when the current model answers 429 (free endpoints share
+// capacity and are often saturated) or 404 (a free model was withdrawn).
+// Override with OPENROUTER_FALLBACK_MODELS (comma-separated; set it to an empty
+// string to disable fallbacks). Prefer a different provider than the primary.
+// 'openrouter/free' is OpenRouter's Free Models Router: it picks a random free
+// model that supports the request's features. Random means unpredictable speed
+// and quality, so it is only the last resort, never the primary.
+export const DEFAULT_FALLBACK_MODELS = [
+  'google/gemma-4-31b-it:free',
+  'openrouter/free',
+];
+
+function getModels(): string[] {
+  const primary = process.env.OPENROUTER_MODEL?.trim() || DEFAULT_OPENROUTER_MODEL;
+  const rawFallbacks = process.env.OPENROUTER_FALLBACK_MODELS;
+  const fallbacks =
+    rawFallbacks === undefined
+      ? DEFAULT_FALLBACK_MODELS
+      : rawFallbacks.split(',').map((m) => m.trim()).filter(Boolean);
+  return [primary, ...fallbacks.filter((m) => m !== primary)];
 }
 
 // Total wall-clock budget for everything we do against OpenRouter (all
@@ -53,9 +74,9 @@ export class OpenRouterError extends Error {
  * returns the raw text content of the model's reply. Never call this from
  * a client component — it reads a server-only environment variable.
  */
-function buildBody(input: GeneratePlanRequest, useStructuredOutput: boolean) {
+function buildBody(input: GeneratePlanRequest, model: string, useStructuredOutput: boolean) {
   return JSON.stringify({
-    model: getModel(),
+    model,
     temperature: 0.6,
     max_tokens: 8000,
     ...(useStructuredOutput ? { response_format: { type: 'json_object' } } : {}),
@@ -80,6 +101,7 @@ interface AttemptResult {
 async function attemptOpenRouter(
   apiKey: string,
   input: GeneratePlanRequest,
+  model: string,
   useStructuredOutput: boolean,
   deadline: number
 ): Promise<AttemptResult> {
@@ -100,7 +122,7 @@ async function attemptOpenRouter(
         'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://localhost:3000',
         'X-Title': 'Challenge App',
       },
-      body: buildBody(input, useStructuredOutput),
+      body: buildBody(input, model, useStructuredOutput),
     });
     const text = await res.text();
     return { ok: res.ok, status: res.status, text };
@@ -209,13 +231,15 @@ export async function generateChallengeJson(
   const canRetry = (retries: number) =>
     retries < MAX_TRANSIENT_RETRIES && deadline - Date.now() > totalMs * 0.25;
 
+  const models = getModels();
+  let modelIndex = 0;
   let useStructuredOutput = true;
   let retries = 0;
   let result: AttemptResult;
 
   for (;;) {
     try {
-      result = await attemptOpenRouter(apiKey, input, useStructuredOutput, deadline);
+      result = await attemptOpenRouter(apiKey, input, models[modelIndex], useStructuredOutput, deadline);
     } catch (err) {
       if (err instanceof OpenRouterError && err.code === 'network' && canRetry(retries)) {
         retries++;
@@ -238,12 +262,21 @@ export async function generateChallengeJson(
       continue;
     }
 
+    // 429 (saturated free endpoint) or 404 (withdrawn model): the same model
+    // cannot succeed, so move to the next one instead of retrying it.
+    if ((result.status === 429 || result.status === 404) && modelIndex < models.length - 1) {
+      modelIndex++;
+      useStructuredOutput = true;
+      retries = 0;
+      continue;
+    }
+
     if (result.status === 429) {
       throw new OpenRouterError(
         'The AI service is busy (rate limit). Please try again shortly.',
         429,
         'upstream',
-        upstreamErrorMessage(result.text)
+        `${models[modelIndex]}: ${upstreamErrorMessage(result.text)}`
       );
     }
 
@@ -258,7 +291,7 @@ export async function generateChallengeJson(
       userMessageForStatus(result.status),
       result.status,
       'upstream',
-      upstreamErrorMessage(result.text)
+      `${models[modelIndex]}: ${upstreamErrorMessage(result.text)}`
     );
   }
 

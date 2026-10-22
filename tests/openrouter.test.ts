@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
+  DEFAULT_FALLBACK_MODELS,
   DEFAULT_OPENROUTER_MODEL,
   OpenRouterError,
   generateChallengeJson,
@@ -39,6 +40,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   process.env.OPENROUTER_API_KEY = 'sk-or-test-key';
   delete process.env.OPENROUTER_MODEL;
+  // Disabled by default so single-model behaviour is tested in isolation.
+  process.env.OPENROUTER_FALLBACK_MODELS = '';
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -50,7 +53,7 @@ describe('generateChallengeJson', () => {
     await expect(generateChallengeJson(input, fast)).resolves.toBe('{"a":1}');
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.model).toBe(DEFAULT_OPENROUTER_MODEL);
-    expect(DEFAULT_OPENROUTER_MODEL).toBe('nvidia/nemotron-3.5-super-vl:free');
+    expect(DEFAULT_OPENROUTER_MODEL).toBe('google/gemma-4-26b-a4b-it:free');
   });
 
   it('uses OPENROUTER_MODEL when set', async () => {
@@ -176,5 +179,78 @@ describe('generateChallengeJson', () => {
     const text = JSON.stringify([err.message, err.detail]);
     expect(text).not.toContain('sk-or-test-key');
     expect(text).not.toContain('secret-user-goal-text');
+  });
+});
+
+describe('model fallback on 429 / 404', () => {
+  const modelsCalled = () => fetchMock.mock.calls.map((c) => JSON.parse(c[1].body).model);
+  const err429 = () => res(429, JSON.stringify({ error: { message: 'rate-limited upstream' } }));
+  const err404 = () => res(404, JSON.stringify({ error: { message: 'No endpoints found' } }));
+
+  beforeEach(() => {
+    process.env.OPENROUTER_MODEL = 'm/primary:free';
+    process.env.OPENROUTER_FALLBACK_MODELS = 'm/second:free, m/third:free';
+  });
+
+  it('moves to the next model when the primary answers 429', async () => {
+    fetchMock.mockResolvedValueOnce(err429()).mockResolvedValueOnce(res(200, okBody('{"ok":1}')));
+    await expect(generateChallengeJson(input, fast)).resolves.toBe('{"ok":1}');
+    expect(modelsCalled()).toEqual(['m/primary:free', 'm/second:free']);
+  });
+
+  it('moves to the next model when the primary answers 404 (withdrawn model)', async () => {
+    fetchMock.mockResolvedValueOnce(err404()).mockResolvedValueOnce(res(200, okBody('{"ok":2}')));
+    await expect(generateChallengeJson(input, fast)).resolves.toBe('{"ok":2}');
+    expect(modelsCalled()).toEqual(['m/primary:free', 'm/second:free']);
+  });
+
+  it('tries every model once, then returns 429 with the model named in detail', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(err429()));
+    const err = await generateChallengeJson(input, fast).catch((e) => e);
+    expect(err.status).toBe(429);
+    expect(err.message).toBe('The AI service is busy (rate limit). Please try again shortly.');
+    expect(err.detail).toContain('m/third:free');
+    expect(modelsCalled()).toEqual(['m/primary:free', 'm/second:free', 'm/third:free']);
+  });
+
+  it('does not rotate on other permanent errors such as 401', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(res(401, '{}')));
+    const err = await generateChallengeJson(input, fast).catch((e) => e);
+    expect(err.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-enables response_format when it moves to the next model', async () => {
+    fetchMock
+      .mockResolvedValueOnce(res(400, JSON.stringify({ error: { message: 'response_format unsupported' } })))
+      .mockResolvedValueOnce(err429())
+      .mockResolvedValueOnce(res(200, okBody('{}')));
+    await generateChallengeJson(input, fast);
+    const bodies = fetchMock.mock.calls.map((c) => JSON.parse(c[1].body));
+    expect(bodies[1].response_format).toBeUndefined();
+    expect(bodies[2].model).toBe('m/second:free');
+    expect(bodies[2].response_format).toBeDefined();
+  });
+
+  it('stops rotating once the time budget is spent', async () => {
+    fetchMock.mockImplementation(hangingFetch);
+    const err = await generateChallengeJson(input, { timeoutMs: 150, ...fast }).catch((e) => e);
+    expect(err.code).toBe('timeout');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not list the primary twice', async () => {
+    process.env.OPENROUTER_MODEL = 'm/second:free';
+    fetchMock.mockImplementation(() => Promise.resolve(err429()));
+    await generateChallengeJson(input, fast).catch(() => {});
+    expect(modelsCalled()).toEqual(['m/second:free', 'm/third:free']);
+  });
+
+  it('uses the built-in fallback chain when the env var is unset', async () => {
+    delete process.env.OPENROUTER_MODEL;
+    delete process.env.OPENROUTER_FALLBACK_MODELS;
+    fetchMock.mockImplementation(() => Promise.resolve(err429()));
+    await generateChallengeJson(input, fast).catch(() => {});
+    expect(modelsCalled()).toEqual([DEFAULT_OPENROUTER_MODEL, ...DEFAULT_FALLBACK_MODELS]);
   });
 });
